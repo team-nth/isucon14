@@ -40,8 +40,8 @@ case "${hostname}" in
 		sudo systemctl disable mysql
 		sudo systemctl stop mysql
 
-		sudo systemctl disable nginx
-		sudo systemctl stop nginx
+		sudo systemctl enable nginx
+		sudo systemctl restart nginx
 
 		;;
 	"ip-192-168-0-13") # isucon3
