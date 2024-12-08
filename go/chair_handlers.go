@@ -2,9 +2,12 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -205,85 +208,157 @@ type chairGetNotificationResponseData struct {
 	Status                string     `json:"status"`
 }
 
+func printAndFlush(w http.ResponseWriter, content string) {
+	fmt.Fprint(w, content)
+
+	f, ok := w.(http.Flusher)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json;charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+
+		b, _ := json.Marshal(struct {
+			Error string `json:"error"`
+		}{Error: "Streaming unsupported!"})
+
+		w.Write(b)
+		fmt.Fprintln(os.Stderr, "Streaming unsupported!")
+		return
+	}
+	f.Flush()
+}
+
 func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	chair := ctx.Value("chair").(*Chair)
 
-	tx, err := db.Beginx()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	defer tx.Rollback()
 	ride := &Ride{}
-	yetSentRideStatus := RideStatus{}
-	status := ""
 
-	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-				RetryAfterMs: 10 * 1000,
-			})
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
+	h := w.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "keep-alive")
+	h.Set("X-Accel-Buffering", "no")
 
-	if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			status, err = getLatestRideStatus(ctx, tx, ride.ID)
+	defaultSleep := 2000 * time.Millisecond
+	errorSleep := 10 * time.Millisecond
+
+	maxLoop := 20
+	loop := maxLoop
+
+	for loop > 0 {
+		isFirst := maxLoop == loop
+		loop--
+
+		func() {
+			tx, err := db.Beginx()
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, err)
 				return
 			}
-		} else {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-	} else {
-		status = yetSentRideStatus.Status
-	}
+			defer tx.Rollback()
 
-	user := &User{}
-	err = tx.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
+			if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					if isFirst {
+						printAndFlush(w, "data: null\n\n")
+					}
+					time.Sleep(defaultSleep)
+					return
+				} else {
+					slog.Error("error SELECT rides", err)
+					time.Sleep(errorSleep)
+					return
+				}
+			}
 
-	if yetSentRideStatus.ID != "" {
-		_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-	}
+			var yetSentRideStatuses []RideStatus
+			if rows, err := db.Queryx("SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC", ride.ID); err == nil {
+				var yetSentRideStatus RideStatus
+				for rows.Next() {
+					if err := rows.StructScan(&yetSentRideStatus); err != nil {
+						slog.Error("error SELECT ride_statuses ", err)
+						time.Sleep(errorSleep)
+						return
+					}
+					yetSentRideStatuses = append(yetSentRideStatuses, yetSentRideStatus)
+				}
+			} else {
+				if errors.Is(err, sql.ErrNoRows) {
+					if isFirst {
+						status, err := getLatestRideStatus(ctx, tx, ride.ID)
+						if err != nil {
+							loop++ // ループ回数を戻す
+							slog.Error("error getLatestRideStatus", err)
+							time.Sleep(errorSleep)
+							return
+						}
+						var yetSentRideStatus RideStatus
+						yetSentRideStatus.Status = status
+						yetSentRideStatuses = append(yetSentRideStatuses)
+					} else {
+						time.Sleep(defaultSleep)
+						return
+					}
+				} else {
+					slog.Error("error SELECT ride_statuses", err)
+					time.Sleep(errorSleep)
+					return
+				}
+			}
 
-	if err := tx.Commit(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
+			user := &User{}
+			err = tx.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+			if err != nil {
+				slog.Error("error SELECT users", err)
+				time.Sleep(errorSleep)
+				return
+			}
 
-	writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-		Data: &chairGetNotificationResponseData{
-			RideID: ride.ID,
-			User: simpleUser{
-				ID:   user.ID,
-				Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
-			},
-			PickupCoordinate: Coordinate{
-				Latitude:  ride.PickupLatitude,
-				Longitude: ride.PickupLongitude,
-			},
-			DestinationCoordinate: Coordinate{
-				Latitude:  ride.DestinationLatitude,
-				Longitude: ride.DestinationLongitude,
-			},
-			Status: status,
-		},
-		RetryAfterMs: 5 * 1000,
-	})
+			for _, yetSentRideStatus := range yetSentRideStatuses {
+				if yetSentRideStatus.ID != "" {
+					_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
+					if err != nil {
+						slog.Error("error UPDATE ride_statuses", err)
+						time.Sleep(errorSleep)
+						return
+					}
+				}
+			}
+
+			if err := tx.Commit(); err != nil {
+				slog.Error("error COMMIT", err)
+				time.Sleep(errorSleep)
+				return
+			}
+
+			for _, yetSentRideStatus := range yetSentRideStatuses {
+				data, err := json.Marshal(&chairGetNotificationResponseData{
+					RideID: ride.ID,
+					User: simpleUser{
+						ID:   user.ID,
+						Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
+					},
+					PickupCoordinate: Coordinate{
+						Latitude:  ride.PickupLatitude,
+						Longitude: ride.PickupLongitude,
+					},
+					DestinationCoordinate: Coordinate{
+						Latitude:  ride.DestinationLatitude,
+						Longitude: ride.DestinationLongitude,
+					},
+					Status: yetSentRideStatus.Status,
+				})
+
+				if err != nil {
+					slog.Error("error UPDATE ride_statuses", err)
+					time.Sleep(errorSleep)
+					return
+				}
+
+				printAndFlush(w, fmt.Sprintf("data: %s\n\n", data))
+			}
+		}()
+	}
 }
 
 type postChairRidesRideIDStatusRequest struct {
