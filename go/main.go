@@ -180,6 +180,13 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
+			var rideStatus string
+			if err := db.GetContext(ctx, &rideStatus, "SELECT status FROM ride_statuses LEFT JOIN rides ON ride_statuses.ride_id = rides.id WHERE rides.chair_id = ? ORDER BY ride_statuses.created_at DESC LIMIT 1", chair.ID); err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+			isCompleted := rideStatus == "COMPLETED"
+
 			locationLen := len(chairID2ChairLocation[chair.ID])
 
 			distance := 0
@@ -189,7 +196,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 				prevLat, prevLon = chairID2ChairLocation[chair.ID][i].Latitude, chairID2ChairLocation[chair.ID][i].Longitude
 			}
 
-			if _, err := db.ExecContext(ctx, "UPDATE chairs SET total_distance = ?, total_distance_updated_at = ?, latitude = ?, longitude = ? WHERE id = ?", distance, chairID2ChairLocation[chair.ID][locationLen-1].CreatedAt, chairID2ChairLocation[chair.ID][locationLen-1].Latitude, chairID2ChairLocation[chair.ID][locationLen-1].Longitude, chair.ID); err != nil {
+			if _, err := db.ExecContext(ctx, "UPDATE chairs SET total_distance = ?, total_distance_updated_at = ?, latitude = ?, longitude = ?, is_completed = ? WHERE id = ?", distance, chairID2ChairLocation[chair.ID][locationLen-1].CreatedAt, chairID2ChairLocation[chair.ID][locationLen-1].Latitude, chairID2ChairLocation[chair.ID][locationLen-1].Longitude, isCompleted, chair.ID); err != nil {
 				writeError(w, http.StatusInternalServerError, err)
 				return
 			}
