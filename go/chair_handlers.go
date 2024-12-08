@@ -330,6 +330,13 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 						time.Sleep(errorSleep)
 						return
 					}
+					if yetSentRideStatus.Status == "COMPLETED" {
+						if _, err := tx.ExecContext(ctx, `UPDATE chairs SET is_completed = TRUE WHERE id = ?`, ride.ChairID); err != nil {
+							slog.Error("error UPDATE ride_statuses", err)
+							time.Sleep(errorSleep)
+							return
+						}
+					}
 				}
 			}
 
