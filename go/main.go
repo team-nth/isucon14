@@ -138,6 +138,64 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	{
+		var chairs []Chair
+		if rows, err := db.Queryx("SELECT * FROM chairs"); err == nil {
+			var chair Chair
+			for rows.Next() {
+				if err := rows.StructScan(&chair); err != nil {
+					writeError(w, http.StatusInternalServerError, err)
+					return
+				}
+				chairs = append(chairs, chair)
+			}
+		} else {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		var chairLocations []ChairLocation
+		if rows, err := db.Queryx("SELECT * FROM chair_locations ORDER BY created_at"); err == nil {
+			var chairLocation ChairLocation
+			for rows.Next() {
+				if err := rows.StructScan(&chairLocation); err != nil {
+					writeError(w, http.StatusInternalServerError, err)
+					return
+				}
+				chairLocations = append(chairLocations, chairLocation)
+			}
+		} else {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		chairID2ChairLocation := map[string][]ChairLocation{}
+		for _, location := range chairLocations {
+			chairID2ChairLocation[location.ChairID] = append(chairID2ChairLocation[location.ChairID], location)
+		}
+
+		for _, chair := range chairs {
+			if len(chairID2ChairLocation[chair.ID]) == 0 {
+				// 移動がなければ(そんなことある？)なにもしない
+				continue
+			}
+
+			locationLen := len(chairID2ChairLocation[chair.ID])
+
+			distance := 0
+			prevLat, prevLon := chairID2ChairLocation[chair.ID][0].Latitude, chairID2ChairLocation[chair.ID][0].Longitude
+			for i := 1; i < locationLen; i++ {
+				distance += calculateDistance(prevLat, prevLon, chairID2ChairLocation[chair.ID][i].Latitude, chairID2ChairLocation[chair.ID][i].Longitude)
+				prevLat, prevLon = chairID2ChairLocation[chair.ID][i].Latitude, chairID2ChairLocation[chair.ID][i].Longitude
+			}
+
+			if _, err := db.ExecContext(ctx, "UPDATE chairs SET total_distance = ?, total_distance_updated_at = ?, latitude = ?, longitude = ? WHERE id = ?", distance, chairID2ChairLocation[chair.ID][locationLen-1].CreatedAt, chairID2ChairLocation[chair.ID][locationLen-1].Latitude, chairID2ChairLocation[chair.ID][locationLen-1].Longitude, chair.ID); err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
 
