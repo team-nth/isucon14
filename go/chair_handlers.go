@@ -261,6 +261,8 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					if isFirst {
 						printAndFlush(w, "data: null\n\n")
+					} else {
+						printAndFlush(w, ": heart beat\n\n")
 					}
 					time.Sleep(defaultSleep)
 					return
@@ -304,6 +306,12 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 					time.Sleep(errorSleep)
 					return
 				}
+			}
+
+			if len(yetSentRideStatuses) == 0 {
+				printAndFlush(w, ": heart beat\n\n")
+				time.Sleep(defaultSleep)
+				return
 			}
 
 			user := &User{}
@@ -357,6 +365,8 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 
 				printAndFlush(w, fmt.Sprintf("data: %s\n\n", data))
 			}
+
+			time.Sleep(defaultSleep)
 		}()
 	}
 }
