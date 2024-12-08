@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -671,7 +671,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	h.Set("Connection", "keep-alive")
 	h.Set("X-Accel-Buffering", "no")
 
-	defaultSleep := 2000 * time.Millisecond
+	defaultSleep := 500 * time.Millisecond
 	errorSleep := 10 * time.Millisecond
 
 	maxLoop := 20
@@ -903,11 +903,11 @@ type appGetNearbyChairsResponseChair struct {
 }
 
 type ChairRideRideStatus struct {
-	ID                     string        `db:"id"`
-	Name                   string        `db:"name"`
-	Model                  string        `db:"model"`
-	Latitude               sql.NullInt32 `db:"latitude"`
-	Longitude              sql.NullInt32 `db:"longitude"`
+	ID        string        `db:"id"`
+	Name      string        `db:"name"`
+	Model     string        `db:"model"`
+	Latitude  sql.NullInt32 `db:"latitude"`
+	Longitude sql.NullInt32 `db:"longitude"`
 }
 
 func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
@@ -951,11 +951,11 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	polygon := fmt.Sprintf("POLYGON((%d %d, %d %d, %d %d, %d %d, %d %d))",
-		lat - distance, lon - distance, // 左下
-		lat - distance, lon + distance, // 左上
-		lat + distance, lon + distance, // 右上
-		lat + distance, lon - distance, // 右下
-		lat - distance, lon - distance, // 閉じる
+		lat-distance, lon-distance, // 左下
+		lat-distance, lon+distance, // 左上
+		lat+distance, lon+distance, // 右上
+		lat+distance, lon-distance, // 右下
+		lat-distance, lon-distance, // 閉じる
 	)
 
 	results := []ChairRideRideStatus{}

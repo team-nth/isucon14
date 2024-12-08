@@ -78,7 +78,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	// s: 椅子の速度
 
 	// e1. 割り当てまでの時間: 30 - 待ち時間 (ここの30はmatchingの間隔次第で安全をとっても良い)
-	// e2. 最終的な付くまでの時間: (l0 + l1 + l2 + l3) / s
 	// e3. のるまでの時間: (l0 + l1 + l2) / s
 	// e4. のってからつくまでの時間: l3 / s
 	// 1-4を足し合わせて一番小さなやつを採用 (状況に応じて各要素は重みをつければ調整できる)
@@ -128,7 +127,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				e3 := float64(l2) / float64(s)
 				e4 := float64(l3) / float64(s)
 
-				cost := e3 + e4
+				cost := e3*2.0 + e4 + (1.0 / (float64(l3) * 100.0))
 				if minCost > cost {
 					minCost = cost
 					targetChair = &openChair

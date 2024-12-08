@@ -240,7 +240,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	h.Set("Connection", "keep-alive")
 	h.Set("X-Accel-Buffering", "no")
 
-	defaultSleep := 2000 * time.Millisecond
+	defaultSleep := 500 * time.Millisecond
 	errorSleep := 10 * time.Millisecond
 
 	maxLoop := 20
