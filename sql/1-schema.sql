@@ -42,6 +42,18 @@ CREATE TABLE chairs
 )
   COMMENT = '椅子情報テーブル';
 
+-- 緯度経度からポイントを生成する
+-- 初期値は0, 0
+-- total_distance_updated_at が NULL ならば 緯度経度は無効とみなせる
+ALTER TABLE chairs ADD COLUMN point POINT GENERATED ALWAYS AS (
+	IF(
+		latitude IS NULL OR longitude IS NULL,
+		POINT(0, 0),
+		POINT(latitude, longitude)
+	)
+) STORED NOT NULL;
+CREATE SPATIAL INDEX chair_locations_sp_index ON chairs (point);
+
 DROP TABLE IF EXISTS chair_locations;
 CREATE TABLE chair_locations
 (

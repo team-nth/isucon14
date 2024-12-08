@@ -19,6 +19,7 @@ type Chair struct {
 	Latitude               sql.NullInt32 `db:"latitude"`
 	Longitude              sql.NullInt32 `db:"longitude"`
 	IsCompleted            bool          `db:"is_completed"`
+	Point                  string        `db:"point"`
 }
 
 type ChairModel struct {
