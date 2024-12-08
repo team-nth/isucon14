@@ -19,7 +19,7 @@ sudo test -f "/var/log/nginx/error.log" && sudo mv /var/log/nginx/error.log /var
 sudo test -f "/var/log/mysql/mysql-slow.log" && sudo mv /var/log/mysql/mysql-slow.log /var/log/mysql/mysql-slow.log.`date "+%Y%m%d_%H%M%S"`
 
 cd go/
-make
+go build -o isuride
 
 hostname="$(hostname)"
 case "${hostname}" in
