@@ -88,7 +88,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 
 	_, err, _ := group.Do("internalGetMatching", func() (interface{}, error) {
 		var waitingRides []Ride
-		if rows, err := db.Queryx("SELECT * FROM rides WHERE chair_id IS NULL"); err == nil {
+		if rows, err := db.Queryx("SELECT * FROM rides WHERE chair_id IS NULL ORDER BY created_at ASC"); err == nil {
 			var ride Ride
 			for rows.Next() {
 				if err := rows.StructScan(&ride); err != nil {
