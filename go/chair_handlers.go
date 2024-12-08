@@ -232,8 +232,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	chair := ctx.Value("chair").(*Chair)
 
 	ride := &Ride{}
-	yetSentRideStatus := RideStatus{}
-	status := ""
 
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
@@ -269,7 +267,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				slog.Error("error SELECT rides", err)
 				time.Sleep(errorSleep)
 				continue
-
 			}
 		}
 
@@ -286,7 +283,13 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		} else {
 			if errors.Is(err, sql.ErrNoRows) {
 				if isFirst {
-					status, err = getLatestRideStatus(ctx, tx, ride.ID)
+					status, err := getLatestRideStatus(ctx, tx, ride.ID)
+					if err != nil {
+						loop++ // ループ回数を戻す
+						slog.Error("error getLatestRideStatus", err)
+						time.Sleep(errorSleep)
+						continue
+					}
 					var yetSentRideStatus RideStatus
 					yetSentRideStatus.Status = status
 					yetSentRideStatuses = append(yetSentRideStatuses)
@@ -299,23 +302,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				time.Sleep(errorSleep)
 				continue
 			}
-		}
-
-		if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				if isFirst {
-					status, err = getLatestRideStatus(ctx, tx, ride.ID)
-				} else {
-					time.Sleep(defaultSleep)
-					continue
-				}
-			} else {
-				slog.Error("error SELECT ride_statuses", err)
-				time.Sleep(errorSleep)
-				continue
-			}
-		} else {
-			status = yetSentRideStatus.Status
 		}
 
 		user := &User{}
