@@ -26,17 +26,35 @@ case "${hostname}" in
 	"ip-192-168-0-11") # isucon1
 		sudo systemctl restart nginx
 		sudo systemctl restart isuride-go.service
-		sudo systemctl restart mysql
+
+		sudo systemctl disable mysql
+		sudo systemctl stop mysql
+
+		sudo systemctl disable isuride-matcher
+		sudo systemctl stop isuride-matcher
 		;;
-	"ip-192-168-0-13") # isucon2
-		sudo systemctl restart nginx
+	"ip-192-168-0-12") # isucon2
 		sudo systemctl restart isuride-go.service
-		sudo systemctl restart mysql
+		sudo systemctl restart isuride-matcher.service
+
+		sudo systemctl disable mysql
+		sudo systemctl stop mysql
+
+		sudo systemctl disable nginx
+		sudo systemctl stop nginx
+
 		;;
-	"ip-192-168-0-12") # isucon3
-		sudo systemctl restart nginx
-		sudo systemctl restart isuride-go.service
+	"ip-192-168-0-13") # isucon3
 		sudo systemctl restart mysql
+
+		sudo systemctl disable isuride-go.service
+		sudo systemctl stop isuride-go.service
+
+		sudo systemctl disable nginx
+		sudo systemctl stop nginx
+
+		sudo systemctl disable isuride-matcher
+		sudo systemctl stop isuride-matcher
 		;;
 	*)
 		echo "${hostname} Didn't match anything"
