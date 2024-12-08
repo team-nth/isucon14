@@ -36,7 +36,8 @@ CREATE TABLE chairs
   total_distance_updated_at DATETIME(6) COMMENT '最終移動日時',
   created_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '登録日時',
   updated_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '更新日時',
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  INDEX (access_token)
 )
   COMMENT = '椅子情報テーブル';
 
@@ -95,7 +96,8 @@ CREATE TABLE rides
   created_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '要求日時',
   updated_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '状態更新日時',
   PRIMARY KEY (id),
-  INDEX (chair_id, updated_at)
+  INDEX (chair_id, updated_at DESC),
+  INDEX (chair_id, created_at DESC)
 )
   COMMENT = 'ライド情報テーブル';
 
@@ -109,7 +111,7 @@ CREATE TABLE ride_statuses
   app_sent_at     DATETIME(6)                                                                NULL COMMENT 'ユーザーへの状態通知日時',
   chair_sent_at   DATETIME(6)                                                                NULL COMMENT '椅子への状態通知日時',
   PRIMARY KEY (id),
-  INDEX (ride_id, created_at)
+  INDEX (ride_id, created_at DESC)
 )
   COMMENT = 'ライドステータスの変更履歴テーブル';
 
