@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -265,6 +266,9 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 						printAndFlush(w, ": heart beat\n\n")
 					}
 					time.Sleep(defaultSleep)
+					return
+				} else if errors.Is(err, context.Canceled) {
+					loop = 0
 					return
 				} else {
 					slog.Error("error SELECT rides", err)
