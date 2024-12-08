@@ -699,6 +699,9 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 					}
 					time.Sleep(defaultSleep)
 					return
+				} else if errors.Is(err, context.Canceled) {
+					loop = 0
+					return
 				} else {
 					slog.Error("error SELECT rides", err)
 					time.Sleep(errorSleep)
