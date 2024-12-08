@@ -241,6 +241,9 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	h.Set("Connection", "keep-alive")
 	h.Set("X-Accel-Buffering", "no")
 
+	defaultSleep := 2000 * time.Millisecond
+	errorSleep := 100 * time.Millisecond
+
 	maxLoop := 20
 	loop := maxLoop
 
@@ -260,11 +263,11 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				if isFirst {
 					printAndFlush(w, "data: null\n\n")
 				}
-				time.Sleep(3000 * time.Millisecond)
+				time.Sleep(defaultSleep)
 				continue
 			} else {
 				slog.Error("error SELECT rides", err)
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(errorSleep)
 				continue
 
 			}
@@ -275,12 +278,12 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				if isFirst {
 					status, err = getLatestRideStatus(ctx, tx, ride.ID)
 				} else {
-					time.Sleep(3000 * time.Millisecond)
+					time.Sleep(defaultSleep)
 					continue
 				}
 			} else {
 				slog.Error("error SELECT ride_statuses", err)
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(errorSleep)
 				continue
 			}
 		} else {
@@ -291,7 +294,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		err = tx.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
 		if err != nil {
 			slog.Error("error SELECT users", err)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(errorSleep)
 			continue
 		}
 
@@ -299,14 +302,14 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
 			if err != nil {
 				slog.Error("error UPDATE ride_statuses", err)
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(errorSleep)
 				continue
 			}
 		}
 
 		if err := tx.Commit(); err != nil {
 			slog.Error("error COMMIT", err)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(errorSleep)
 			continue
 		}
 
@@ -329,7 +332,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			slog.Error("error UPDATE ride_statuses", err)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(errorSleep)
 			continue
 		}
 
