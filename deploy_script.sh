@@ -25,20 +25,20 @@ hostname="$(hostname)"
 case "${hostname}" in
 	"ip-192-168-0-11") # isucon1
 		sudo systemctl restart nginx
-		sudo systemctl restart isupipe-go.service
+		sudo systemctl restart isuride-go.service
 		sudo systemctl restart mysql
 		;;
 	"ip-192-168-0-13") # isucon2
 		#sudo systemctl restart mysql
 		sudo systemctl restart nginx
-		sudo systemctl restart isupipe-go.service
+		sudo systemctl restart isuride-go.service
 		sudo systemctl restart mysql
 		;;
 	"ip-192-168-0-12") # isucon3
 		sudo systemctl restart nginx
-		sudo systemctl restart isupipe-go.service
+		sudo systemctl restart isuride-go.service
 		sudo systemctl restart mysql	
-		#sudo systemctl restart isupipe-go.service
+		#sudo systemctl restart isuride-go.service
 		;;
 	*)
 		echo "${hostname} Didn't match anything"
