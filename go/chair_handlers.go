@@ -242,7 +242,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Accel-Buffering", "no")
 
 	defaultSleep := 2000 * time.Millisecond
-	errorSleep := 100 * time.Millisecond
+	errorSleep := 10 * time.Millisecond
 
 	maxLoop := 20
 	loop := maxLoop
@@ -273,6 +273,34 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		var yetSentRideStatuses []RideStatus
+		if rows, err := db.Queryx("SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC", ride.ID); err == nil {
+			var yetSentRideStatus RideStatus
+			for rows.Next() {
+				if err := rows.StructScan(&yetSentRideStatus); err != nil {
+					writeError(w, http.StatusInternalServerError, err)
+					return
+				}
+				yetSentRideStatuses = append(yetSentRideStatuses, yetSentRideStatus)
+			}
+		} else {
+			if errors.Is(err, sql.ErrNoRows) {
+				if isFirst {
+					status, err = getLatestRideStatus(ctx, tx, ride.ID)
+					var yetSentRideStatus RideStatus
+					yetSentRideStatus.Status = status
+					yetSentRideStatuses = append(yetSentRideStatuses)
+				} else {
+					time.Sleep(defaultSleep)
+					continue
+				}
+			} else {
+				slog.Error("error SELECT ride_statuses", err)
+				time.Sleep(errorSleep)
+				continue
+			}
+		}
+
 		if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				if isFirst {
@@ -298,12 +326,14 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if yetSentRideStatus.ID != "" {
-			_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
-			if err != nil {
-				slog.Error("error UPDATE ride_statuses", err)
-				time.Sleep(errorSleep)
-				continue
+		for _, yetSentRideStatus := range yetSentRideStatuses {
+			if yetSentRideStatus.ID != "" {
+				_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
+				if err != nil {
+					slog.Error("error UPDATE ride_statuses", err)
+					time.Sleep(errorSleep)
+					continue
+				}
 			}
 		}
 
@@ -313,30 +343,32 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		data, err := json.Marshal(&chairGetNotificationResponseData{
-			RideID: ride.ID,
-			User: simpleUser{
-				ID:   user.ID,
-				Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
-			},
-			PickupCoordinate: Coordinate{
-				Latitude:  ride.PickupLatitude,
-				Longitude: ride.PickupLongitude,
-			},
-			DestinationCoordinate: Coordinate{
-				Latitude:  ride.DestinationLatitude,
-				Longitude: ride.DestinationLongitude,
-			},
-			Status: status,
-		})
+		for _, yetSentRideStatus := range yetSentRideStatuses {
+			data, err := json.Marshal(&chairGetNotificationResponseData{
+				RideID: ride.ID,
+				User: simpleUser{
+					ID:   user.ID,
+					Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
+				},
+				PickupCoordinate: Coordinate{
+					Latitude:  ride.PickupLatitude,
+					Longitude: ride.PickupLongitude,
+				},
+				DestinationCoordinate: Coordinate{
+					Latitude:  ride.DestinationLatitude,
+					Longitude: ride.DestinationLongitude,
+				},
+				Status: yetSentRideStatus.Status,
+			})
 
-		if err != nil {
-			slog.Error("error UPDATE ride_statuses", err)
-			time.Sleep(errorSleep)
-			continue
+			if err != nil {
+				slog.Error("error UPDATE ride_statuses", err)
+				time.Sleep(errorSleep)
+				continue
+			}
+
+			printAndFlush(w, fmt.Sprintf("data: %s\n\n", data))
 		}
-
-		printAndFlush(w, fmt.Sprintf("data: %s\n\n", data))
 	}
 }
 
