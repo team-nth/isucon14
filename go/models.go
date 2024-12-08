@@ -18,6 +18,7 @@ type Chair struct {
 	TotalDistanceUpdatedAt sql.NullTime  `db:"total_distance_updated_at"`
 	Latitude               sql.NullInt32 `db:"latitude"`
 	Longitude              sql.NullInt32 `db:"longitude"`
+	IsCompleted            bool          `db:"is_completed"`
 }
 
 type ChairModel struct {
